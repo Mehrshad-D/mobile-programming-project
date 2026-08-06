@@ -34,19 +34,19 @@ class ProfileScreen extends StatelessWidget {
       );
     }
     final user = state.account!;
-    final watchedMovies = state.catalog
+    final watchedMovies = state.allMedia
         .where(
           (e) =>
               e.type == MediaType.movie &&
               state.statusOf(e.id) == WatchStatus.completed,
         )
         .length;
-    final watchedSeries = state.catalog
+    final watchedSeries = state.allMedia
         .where((e) => e.type == MediaType.series && state.progress(e) > 0)
         .length;
     final watchedCount = state.watchedEpisodes.length;
     final minutes =
-        state.catalog.fold<int>(
+        state.allMedia.fold<int>(
           0,
           (sum, media) =>
               sum +
@@ -54,7 +54,7 @@ class ProfileScreen extends StatelessWidget {
                   .where((e) => state.isEpisodeWatched(media.id, e.id))
                   .fold(0, (value, e) => value + e.runtime),
         ) +
-        state.catalog
+        state.allMedia
             .where(
               (e) =>
                   e.type == MediaType.movie &&
@@ -65,7 +65,7 @@ class ProfileScreen extends StatelessWidget {
         ? 0.0
         : state.ratings.values.reduce((a, b) => a + b) / state.ratings.length;
     final genreCounts = <String, int>{};
-    for (final media in state.catalog.where(
+    for (final media in state.allMedia.where(
       (e) => state.statusOf(e.id) != WatchStatus.none,
     )) {
       for (final genre in media.genres) {

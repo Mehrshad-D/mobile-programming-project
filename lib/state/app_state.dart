@@ -26,9 +26,17 @@ class AppState extends ChangeNotifier {
   final Map<String, int> ratings = {};
   final Map<String, List<Review>> reviews = {};
   final Map<String, Set<String>> customLists = {};
+  final Map<String, MediaItem> savedMedia = {};
 
   bool get signedIn => account != null;
   List<MediaItem> get catalog => demoCatalog;
+  List<MediaItem> get allMedia {
+    final demoIds = catalog.map((media) => media.id).toSet();
+    return [
+      ...catalog,
+      ...savedMedia.values.where((media) => !demoIds.contains(media.id)),
+    ];
+  }
 
   static Future<AppState> create() async {
     final state = AppState(await SharedPreferences.getInstance());
@@ -134,8 +142,9 @@ class AppState extends ChangeNotifier {
   WatchStatus statusOf(String id) => statuses[id] ?? WatchStatus.none;
   bool isFavorite(String id) => statusOf(id) == WatchStatus.favorite;
 
-  void setStatus(String id, WatchStatus status) {
+  void setStatus(String id, WatchStatus status, {MediaItem? media}) {
     if (!signedIn) return;
+    _remember(media);
     if (status == WatchStatus.none) {
       statuses.remove(id);
     } else {
@@ -144,12 +153,16 @@ class AppState extends ChangeNotifier {
     _changed();
   }
 
-  void toggleFavorite(String id) =>
-      setStatus(id, isFavorite(id) ? WatchStatus.none : WatchStatus.favorite);
+  void toggleFavorite(String id, {MediaItem? media}) => setStatus(
+    id,
+    isFavorite(id) ? WatchStatus.none : WatchStatus.favorite,
+    media: media,
+  );
   bool isEpisodeWatched(String mediaId, String episodeId) =>
       watchedEpisodes.contains('$mediaId:$episodeId');
-  void toggleEpisode(String mediaId, String episodeId) {
+  void toggleEpisode(String mediaId, String episodeId, {MediaItem? media}) {
     if (!signedIn) return;
+    _remember(media);
     final key = '$mediaId:$episodeId';
     watchedEpisodes.contains(key)
         ? watchedEpisodes.remove(key)
@@ -167,15 +180,17 @@ class AppState extends ChangeNotifier {
     return count / media.episodes.length;
   }
 
-  void rate(String id, int value) {
+  void rate(String id, int value, {MediaItem? media}) {
     if (signedIn) {
+      _remember(media);
       ratings[id] = value.clamp(1, 5);
       _changed();
     }
   }
 
-  void addReview(String id, String text, bool spoiler) {
+  void addReview(String id, String text, bool spoiler, {MediaItem? media}) {
     if (!signedIn || text.trim().isEmpty) return;
+    _remember(media);
     reviews
         .putIfAbsent(id, () => [])
         .insert(
@@ -205,8 +220,13 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void setListMembership(String id, Set<String> selectedLists) {
+  void setListMembership(
+    String id,
+    Set<String> selectedLists, {
+    MediaItem? media,
+  }) {
     if (!signedIn) return;
+    _remember(media);
     for (final entry in customLists.entries) {
       if (selectedLists.contains(entry.key)) {
         entry.value.add(id);
@@ -220,6 +240,15 @@ class AppState extends ChangeNotifier {
   void deleteList(String name) {
     customLists.remove(name);
     _changed();
+  }
+
+  void _remember(MediaItem? media) {
+    if (media != null) savedMedia[media.id] = media;
+  }
+
+  void cacheMedia(MediaItem media) {
+    savedMedia[media.id] = media;
+    _save();
   }
 
   void updateProfile({
@@ -246,7 +275,7 @@ class AppState extends ChangeNotifier {
     }
     searching = true;
     notifyListeners();
-    final local = catalog
+    final local = allMedia
         .where(
           (m) =>
               '${m.title} ${m.originalTitle} ${m.genres.join(' ')} ${m.director} ${m.cast.join(' ')}'
@@ -256,6 +285,10 @@ class AppState extends ChangeNotifier {
         .toList();
     try {
       final remote = await catalogue.search(query);
+      for (final media in remote) {
+        savedMedia.putIfAbsent(media.id, () => media);
+      }
+      _save();
       final ids = local.map((e) => e.id).toSet();
       searchResults = [...local, ...remote.where((e) => ids.add(e.id))];
     } on CatalogException catch (e) {
@@ -324,6 +357,14 @@ class AppState extends ChangeNotifier {
           (k, v) => MapEntry(k, (v as List).cast<String>().toSet()),
         ),
       );
+    savedMedia
+      ..clear()
+      ..addAll(
+        (json['savedMedia'] as Map<String, dynamic>? ?? {}).map(
+          (id, value) =>
+              MapEntry(id, MediaItem.fromJson(value as Map<String, dynamic>)),
+        ),
+      );
   }
 
   Future<void> _save() => _prefs.setString(
@@ -340,6 +381,7 @@ class AppState extends ChangeNotifier {
         (k, v) => MapEntry(k, v.map((e) => e.toJson()).toList()),
       ),
       'customLists': customLists.map((k, v) => MapEntry(k, v.toList())),
+      'savedMedia': savedMedia.map((id, media) => MapEntry(id, media.toJson())),
     }),
   );
 }

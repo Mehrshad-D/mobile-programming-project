@@ -29,6 +29,22 @@ class Episode {
   final String overview;
 
   String get id => '$season-$number';
+
+  Map<String, dynamic> toJson() => {
+    'season': season,
+    'number': number,
+    'title': title,
+    'runtime': runtime,
+    'overview': overview,
+  };
+
+  factory Episode.fromJson(Map<String, dynamic> json) => Episode(
+    season: json['season'] as int,
+    number: json['number'] as int,
+    title: json['title'] as String,
+    runtime: json['runtime'] as int,
+    overview: json['overview'] as String,
+  );
 }
 
 class MediaItem {
@@ -50,6 +66,7 @@ class MediaItem {
     this.endYear,
     this.status = 'منتشر شده',
     this.episodes = const [],
+    this.declaredSeasonCount = 0,
     this.featured = false,
   });
 
@@ -70,12 +87,59 @@ class MediaItem {
   final List<String> cast;
   final String status;
   final List<Episode> episodes;
+  final int declaredSeasonCount;
   final bool featured;
 
   bool get isSeries => type == MediaType.series;
   int get seasonCount => episodes.isEmpty
-      ? 0
+      ? declaredSeasonCount
       : episodes.map((e) => e.season).reduce((a, b) => a > b ? a : b);
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'originalTitle': originalTitle,
+    'type': type.name,
+    'posterUrl': posterUrl,
+    'backdropUrl': backdropUrl,
+    'overview': overview,
+    'year': year,
+    'endYear': endYear,
+    'genres': genres,
+    'rating': rating,
+    'runtime': runtime,
+    'country': country,
+    'director': director,
+    'cast': cast,
+    'status': status,
+    'episodes': episodes.map((episode) => episode.toJson()).toList(),
+    'declaredSeasonCount': declaredSeasonCount,
+    'featured': featured,
+  };
+
+  factory MediaItem.fromJson(Map<String, dynamic> json) => MediaItem(
+    id: json['id'] as String,
+    title: json['title'] as String,
+    originalTitle: json['originalTitle'] as String,
+    type: MediaType.values.byName(json['type'] as String),
+    posterUrl: json['posterUrl'] as String,
+    backdropUrl: json['backdropUrl'] as String,
+    overview: json['overview'] as String,
+    year: json['year'] as int,
+    endYear: json['endYear'] as int?,
+    genres: (json['genres'] as List<dynamic>).cast<String>(),
+    rating: (json['rating'] as num).toDouble(),
+    runtime: json['runtime'] as int,
+    country: json['country'] as String,
+    director: json['director'] as String,
+    cast: (json['cast'] as List<dynamic>).cast<String>(),
+    status: json['status'] as String,
+    episodes: (json['episodes'] as List<dynamic>)
+        .map((episode) => Episode.fromJson(episode as Map<String, dynamic>))
+        .toList(),
+    declaredSeasonCount: json['declaredSeasonCount'] as int? ?? 0,
+    featured: json['featured'] as bool? ?? false,
+  );
 }
 
 class Review {

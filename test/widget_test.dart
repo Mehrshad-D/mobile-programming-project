@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:project_film_management/main.dart';
+import 'package:project_film_management/models/media.dart';
 import 'package:project_film_management/screens/detail_screen.dart';
 import 'package:project_film_management/screens/library_screen.dart';
 import 'package:project_film_management/state/app_state.dart';
@@ -136,4 +137,62 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  test(
+    'persists an online series so My Lists can resolve its IMDb id',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = await AppState.create();
+      state.register(
+        name: 'کاربر تست',
+        username: 'آزمایشگر',
+        email: 'test@example.com',
+        password: '123456',
+      );
+      const onlineSeries = MediaItem(
+        id: 'tt-online-series',
+        title: 'سریال آنلاین',
+        originalTitle: 'Online Series',
+        type: MediaType.series,
+        posterUrl: '',
+        backdropUrl: '',
+        overview: 'سریالی دریافت‌شده از سرویس آنلاین',
+        year: 2026,
+        genres: ['درام'],
+        rating: 8.2,
+        runtime: 45,
+        country: 'ایران',
+        director: 'کارگردان',
+        cast: ['بازیگر'],
+        declaredSeasonCount: 1,
+        episodes: [
+          Episode(
+            season: 1,
+            number: 1,
+            title: 'قسمت اول',
+            runtime: 45,
+            overview: 'شروع داستان',
+          ),
+        ],
+      );
+      state.createList('سریال‌های من');
+      state.setListMembership(onlineSeries.id, {
+        'سریال‌های من',
+      }, media: onlineSeries);
+      await Future<void>.delayed(Duration.zero);
+
+      final restored = await AppState.create();
+      expect(restored.customLists['سریال‌های من'], contains(onlineSeries.id));
+      expect(
+        restored.allMedia.map((media) => media.id),
+        contains(onlineSeries.id),
+      );
+      expect(
+        restored.allMedia
+            .singleWhere((media) => media.id == onlineSeries.id)
+            .episodes,
+        hasLength(1),
+      );
+    },
+  );
 }

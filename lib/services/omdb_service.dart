@@ -36,7 +36,7 @@ class OmdbService {
     return details.whereType<MediaItem>().toList();
   }
 
-  Future<MediaItem?> findById(String id) async {
+  Future<MediaItem?> findById(String id, {bool includeEpisodes = false}) async {
     if (!isConfigured) return null;
     final json = await _get(
       Uri.https('www.omdbapi.com', '/', {
@@ -53,6 +53,11 @@ class OmdbService {
     final yearParts = (json['Year']?.toString() ?? '').split(
       RegExp(r'[^0-9]+'),
     );
+    final seasonCount = number(json['totalSeasons']?.toString());
+    final runtime = number(json['Runtime']?.toString());
+    final episodes = type == MediaType.series && includeEpisodes
+        ? await _fetchEpisodes(id, seasonCount, runtime)
+        : const <Episode>[];
     return MediaItem(
       id: json['imdbID'] as String,
       title: json['Title']?.toString() ?? 'بدون عنوان',
@@ -72,7 +77,7 @@ class OmdbService {
           .where((e) => e.isNotEmpty)
           .toList(),
       rating: decimal(json['imdbRating']?.toString()),
-      runtime: number(json['Runtime']?.toString()),
+      runtime: runtime,
       country: json['Country']?.toString() ?? '-',
       director: json['Director']?.toString() ?? '-',
       cast: (json['Actors']?.toString() ?? '')
@@ -80,7 +85,50 @@ class OmdbService {
           .where((e) => e.isNotEmpty)
           .toList(),
       status: type == MediaType.series ? 'اطلاعات IMDb' : 'منتشر شده',
+      declaredSeasonCount: seasonCount,
+      episodes: episodes,
     );
+  }
+
+  Future<List<Episode>> _fetchEpisodes(
+    String id,
+    int seasonCount,
+    int defaultRuntime,
+  ) async {
+    if (seasonCount <= 0) return const [];
+    final seasons = await Future.wait([
+      for (var season = 1; season <= seasonCount; season++)
+        _get(
+          Uri.https('www.omdbapi.com', '/', {
+            'apikey': _apiKey,
+            'i': id,
+            'Season': '$season',
+          }),
+        ),
+    ]);
+    final episodes = <Episode>[];
+    for (var index = 0; index < seasons.length; index++) {
+      final response = seasons[index];
+      if (response['Response'] == 'False') continue;
+      for (final raw in response['Episodes'] as List<dynamic>? ?? const []) {
+        final json = raw as Map<String, dynamic>;
+        final number = int.tryParse(json['Episode']?.toString() ?? '');
+        if (number == null) continue;
+        final released = json['Released']?.toString();
+        episodes.add(
+          Episode(
+            season: index + 1,
+            number: number,
+            title: json['Title']?.toString() ?? 'قسمت $number',
+            runtime: defaultRuntime,
+            overview: released == null || released == 'N/A'
+                ? 'تاریخ انتشار ثبت نشده است.'
+                : 'تاریخ انتشار: $released',
+          ),
+        );
+      }
+    }
+    return episodes;
   }
 
   Future<Map<String, dynamic>> _get(Uri uri) async {

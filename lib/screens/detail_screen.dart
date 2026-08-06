@@ -4,9 +4,55 @@ import '../main.dart';
 import '../models/media.dart';
 import '../widgets/media_widgets.dart';
 
-class DetailScreen extends StatelessWidget {
+class DetailScreen extends StatefulWidget {
   const DetailScreen({super.key, required this.media});
   final MediaItem media;
+
+  @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  late MediaItem media = widget.media;
+  bool _requestedEpisodes = false;
+  bool _loadingEpisodes = false;
+  String? _episodeError;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (media.isSeries && media.episodes.isEmpty && !_requestedEpisodes) {
+      _loadEpisodes();
+    }
+  }
+
+  Future<void> _loadEpisodes() async {
+    _requestedEpisodes = true;
+    _loadingEpisodes = true;
+    _episodeError = null;
+    try {
+      final loaded = await AppScope.of(
+        context,
+      ).catalogue.findById(media.id, includeEpisodes: true);
+      if (!mounted) return;
+      if (loaded != null) AppScope.of(context).cacheMedia(loaded);
+      setState(() {
+        if (loaded != null) media = loaded;
+        _loadingEpisodes = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingEpisodes = false;
+        _episodeError = error.toString();
+      });
+    }
+  }
+
+  void _retryEpisodes() {
+    setState(() => _requestedEpisodes = false);
+    _loadEpisodes();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +67,7 @@ class DetailScreen extends StatelessWidget {
               IconButton(
                 onPressed: () {
                   if (!state.signedIn) return showMemberRequired(context);
-                  state.toggleFavorite(media.id);
+                  state.toggleFavorite(media.id, media: media);
                 },
                 icon: Icon(
                   state.isFavorite(media.id)
@@ -108,7 +154,9 @@ class DetailScreen extends StatelessWidget {
                                 Chip(
                                   label: Text(
                                     media.isSeries
-                                        ? '${media.seasonCount} فصل'
+                                        ? _loadingEpisodes
+                                              ? 'دریافت فصل‌ها...'
+                                              : '${media.seasonCount} فصل'
                                         : '${media.runtime} دقیقه',
                                   ),
                                 ),
@@ -159,7 +207,50 @@ class DetailScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     _Progress(media: media),
                     const SizedBox(height: 10),
-                    _Episodes(media: media),
+                    if (_loadingEpisodes)
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Column(
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 12),
+                              Text('در حال دریافت فصل‌ها و قسمت‌ها...'),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_episodeError != null)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Column(
+                            children: [
+                              const Icon(Icons.cloud_off, size: 38),
+                              const SizedBox(height: 8),
+                              Text(_episodeError!, textAlign: TextAlign.center),
+                              const SizedBox(height: 10),
+                              FilledButton.tonalIcon(
+                                onPressed: _retryEpisodes,
+                                icon: const Icon(Icons.refresh),
+                                label: const Text('تلاش دوباره'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (media.episodes.isEmpty)
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text(
+                            'اطلاعات قسمت‌های این سریال در OMDb ثبت نشده است.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    else
+                      _Episodes(media: media),
                   ],
                   const SizedBox(height: 25),
                   _Rating(media: media),
@@ -227,7 +318,7 @@ class _Actions extends StatelessWidget {
         IconButton.filledTonal(
           onPressed: () {
             if (!state.signedIn) return showMemberRequired(context);
-            state.toggleFavorite(media.id);
+            state.toggleFavorite(media.id, media: media);
           },
           icon: Icon(
             state.isFavorite(media.id) ? Icons.favorite : Icons.favorite_border,
@@ -275,7 +366,9 @@ class _Actions extends StatelessWidget {
         ),
       ),
     );
-    if (status != null && context.mounted) state.setStatus(media.id, status);
+    if (status != null && context.mounted) {
+      state.setStatus(media.id, status, media: media);
+    }
   }
 
   Future<void> _listsSheet(BuildContext context) async {
@@ -292,7 +385,7 @@ class _Actions extends StatelessWidget {
       ),
     );
     if (selected != null && context.mounted) {
-      state.setListMembership(media.id, selected);
+      state.setListMembership(media.id, selected, media: media);
     }
   }
 }
@@ -438,7 +531,7 @@ class _EpisodesState extends State<_Episodes> {
               value: state.isEpisodeWatched(widget.media.id, e.id),
               onChanged: (_) {
                 if (!state.signedIn) return showMemberRequired(context);
-                state.toggleEpisode(widget.media.id, e.id);
+                state.toggleEpisode(widget.media.id, e.id, media: widget.media);
               },
               title: Text(
                 '${e.number}. ${e.title}',
@@ -482,7 +575,7 @@ class _Rating extends StatelessWidget {
                   IconButton(
                     onPressed: () {
                       if (!state.signedIn) return showMemberRequired(context);
-                      state.rate(media.id, i);
+                      state.rate(media.id, i, media: media);
                     },
                     icon: Icon(
                       i <= selected
@@ -555,7 +648,7 @@ class _Reviews extends StatelessWidget {
       builder: (_) => const _ReviewComposer(),
     );
     if (draft != null && context.mounted) {
-      state.addReview(media.id, draft.text, draft.spoiler);
+      state.addReview(media.id, draft.text, draft.spoiler, media: media);
     }
   }
 }

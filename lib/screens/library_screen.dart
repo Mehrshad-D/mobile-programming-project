@@ -158,7 +158,7 @@ class _StatusGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final items = state.catalog
+    final items = state.allMedia
         .where((e) => state.statusOf(e.id) == status)
         .toList();
     if (items.isEmpty) {
@@ -200,7 +200,7 @@ class _CustomLists extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: state.customLists.entries.map((entry) {
-        final items = state.catalog
+        final items = state.allMedia
             .where((e) => entry.value.contains(e.id))
             .toList();
         return Card(

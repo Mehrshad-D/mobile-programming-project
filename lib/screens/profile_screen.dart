@@ -227,6 +227,8 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 16),
             TextField(
               controller: name,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
               decoration: const InputDecoration(
                 labelText: 'نام و نام خانوادگی',
               ),
@@ -234,12 +236,17 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
             TextField(
               controller: username,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
               decoration: const InputDecoration(labelText: 'نام کاربری'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: bio,
               maxLines: 3,
+              keyboardType: TextInputType.multiline,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
               decoration: const InputDecoration(labelText: 'درباره من'),
             ),
             const SizedBox(height: 16),

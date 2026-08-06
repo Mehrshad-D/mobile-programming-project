@@ -99,35 +99,57 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
-  void _newList(BuildContext context) {
-    final controller = TextEditingController();
-    showDialog<void>(
+  Future<void> _newList(BuildContext context) async {
+    final state = AppScope.of(context);
+    final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('فهرست شخصی جدید'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'مثلاً بهترین فیلم‌های اکشن',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('انصراف'),
-          ),
-          FilledButton(
-            onPressed: () {
-              AppScope.of(context).createList(controller.text);
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('ساختن'),
-          ),
-        ],
-      ),
-    ).whenComplete(controller.dispose);
+      builder: (_) => const _NewListDialog(),
+    );
+    if (name != null && context.mounted) state.createList(name);
   }
+}
+
+class _NewListDialog extends StatefulWidget {
+  const _NewListDialog();
+
+  @override
+  State<_NewListDialog> createState() => _NewListDialogState();
+}
+
+class _NewListDialogState extends State<_NewListDialog> {
+  final controller = TextEditingController();
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('فهرست شخصی جدید'),
+    content: TextField(
+      controller: controller,
+      autofocus: true,
+      textDirection: TextDirection.rtl,
+      textAlign: TextAlign.right,
+      decoration: const InputDecoration(hintText: 'مثلاً بهترین فیلم‌های اکشن'),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('انصراف'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final name = controller.text.trim();
+          if (name.isEmpty) return;
+          Navigator.pop(context, name);
+        },
+        child: const Text('ساختن'),
+      ),
+    ],
+  );
 }
 
 class _StatusGrid extends StatelessWidget {

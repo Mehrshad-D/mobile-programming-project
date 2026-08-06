@@ -88,6 +88,8 @@ class _AuthScreenState extends State<AuthScreen> {
                   if (registerMode) ...[
                     TextFormField(
                       controller: name,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
                       decoration: const InputDecoration(
                         labelText: 'نام و نام خانوادگی',
                         prefixIcon: Icon(Icons.person_outline),
@@ -99,7 +101,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: username,
-                      textDirection: TextDirection.ltr,
+                      textDirection: TextDirection.rtl,
+                      textAlign: TextAlign.right,
                       decoration: const InputDecoration(
                         labelText: 'نام کاربری',
                         prefixIcon: Icon(Icons.alternate_email),

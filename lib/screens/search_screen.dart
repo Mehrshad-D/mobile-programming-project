@@ -50,6 +50,9 @@ class _SearchScreenState extends State<SearchScreen> {
             child: TextField(
               controller: controller,
               autofocus: false,
+              textDirection: TextDirection.rtl,
+              textAlign: TextAlign.right,
+              keyboardType: TextInputType.text,
               decoration: InputDecoration(
                 hintText: 'عنوان، بازیگر، کارگردان یا ژانر',
                 prefixIcon: const Icon(Icons.search),

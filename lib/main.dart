@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'screens/auth_screen.dart';
 import 'screens/main_shell.dart';
@@ -26,7 +27,13 @@ class FilmYabApp extends StatelessWidget {
     child: MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'فیلم‌یاب',
-      locale: const Locale('fa'),
+      locale: const Locale('fa', 'IR'),
+      supportedLocales: const [Locale('fa', 'IR'), Locale('en', 'US')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       themeMode: ThemeMode.dark,
       theme: ThemeData(
         brightness: Brightness.dark,

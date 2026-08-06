@@ -205,6 +205,18 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void setListMembership(String id, Set<String> selectedLists) {
+    if (!signedIn) return;
+    for (final entry in customLists.entries) {
+      if (selectedLists.contains(entry.key)) {
+        entry.value.add(id);
+      } else {
+        entry.value.remove(id);
+      }
+    }
+    _changed();
+  }
+
   void deleteList(String name) {
     customLists.remove(name);
     _changed();

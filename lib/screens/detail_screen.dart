@@ -237,10 +237,10 @@ class _Actions extends StatelessWidget {
     );
   }
 
-  void _statusSheet(BuildContext context) {
+  Future<void> _statusSheet(BuildContext context) async {
     final state = AppScope.of(context);
     if (!state.signedIn) return showMemberRequired(context);
-    showModalBottomSheet<void>(
+    final status = await showModalBottomSheet<WatchStatus>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Padding(
@@ -257,8 +257,7 @@ class _Actions extends StatelessWidget {
               RadioGroup<WatchStatus>(
                 groupValue: state.statusOf(media.id),
                 onChanged: (value) {
-                  if (value != null) state.setStatus(media.id, value);
-                  Navigator.pop(sheetContext);
+                  if (value != null) Navigator.pop(sheetContext, value);
                 },
                 child: Column(
                   children: WatchStatus.values
@@ -276,42 +275,78 @@ class _Actions extends StatelessWidget {
         ),
       ),
     );
+    if (status != null && context.mounted) state.setStatus(media.id, status);
   }
 
-  void _listsSheet(BuildContext context) {
+  Future<void> _listsSheet(BuildContext context) async {
     final state = AppScope.of(context);
     if (!state.signedIn) return showMemberRequired(context);
-    showModalBottomSheet<void>(
+    final selected = await showModalBottomSheet<Set<String>>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'افزودن به فهرست شخصی',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-              if (state.customLists.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Text('ابتدا در بخش «فهرست من» یک فهرست شخصی بسازید.'),
-                ),
-              ...state.customLists.entries.map(
-                (e) => CheckboxListTile(
-                  value: e.value.contains(media.id),
-                  title: Text(e.key),
-                  onChanged: (_) => state.toggleInList(e.key, media.id),
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (_) => _ListMembershipSheet(
+        listNames: state.customLists.keys.toList(),
+        initiallySelected: state.customLists.entries
+            .where((entry) => entry.value.contains(media.id))
+            .map((entry) => entry.key)
+            .toSet(),
       ),
     );
+    if (selected != null && context.mounted) {
+      state.setListMembership(media.id, selected);
+    }
   }
+}
+
+class _ListMembershipSheet extends StatefulWidget {
+  const _ListMembershipSheet({
+    required this.listNames,
+    required this.initiallySelected,
+  });
+  final List<String> listNames;
+  final Set<String> initiallySelected;
+
+  @override
+  State<_ListMembershipSheet> createState() => _ListMembershipSheetState();
+}
+
+class _ListMembershipSheetState extends State<_ListMembershipSheet> {
+  late final Set<String> selected = {...widget.initiallySelected};
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'افزودن به فهرست شخصی',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          if (widget.listNames.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Text('ابتدا در بخش «فهرست من» یک فهرست شخصی بسازید.'),
+            ),
+          ...widget.listNames.map(
+            (name) => CheckboxListTile(
+              value: selected.contains(name),
+              title: Text(name),
+              onChanged: (checked) => setState(() {
+                checked == true ? selected.add(name) : selected.remove(name);
+              }),
+            ),
+          ),
+          if (widget.listNames.isNotEmpty)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, selected),
+              child: const Text('ذخیره تغییرات'),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _Progress extends StatelessWidget {
@@ -511,65 +546,90 @@ class _Reviews extends StatelessWidget {
     );
   }
 
-  void _newReview(BuildContext context) {
+  Future<void> _newReview(BuildContext context) async {
     final state = AppScope.of(context);
     if (!state.signedIn) return showMemberRequired(context);
-    final controller = TextEditingController();
-    bool spoiler = false;
-    showModalBottomSheet<void>(
+    final draft = await showModalBottomSheet<_ReviewDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (_, setLocal) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            20,
-            20,
-            MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'نظر شما',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'نظر خود را بنویسید...',
-                ),
-              ),
-              SwitchListTile(
-                value: spoiler,
-                title: const Text('این نظر داستان را لو می‌دهد'),
-                onChanged: (v) => setLocal(() => spoiler = v),
-              ),
-              FilledButton(
-                onPressed: () {
-                  if (controller.text.trim().isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('متن نظر نمی‌تواند خالی باشد.'),
-                      ),
-                    );
-                    return;
-                  }
-                  state.addReview(media.id, controller.text, spoiler);
-                  Navigator.pop(sheetContext);
-                },
-                child: const Text('انتشار نظر'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).whenComplete(controller.dispose);
+      builder: (_) => const _ReviewComposer(),
+    );
+    if (draft != null && context.mounted) {
+      state.addReview(media.id, draft.text, draft.spoiler);
+    }
   }
+}
+
+class _ReviewDraft {
+  const _ReviewDraft(this.text, this.spoiler);
+  final String text;
+  final bool spoiler;
+}
+
+class _ReviewComposer extends StatefulWidget {
+  const _ReviewComposer();
+
+  @override
+  State<_ReviewComposer> createState() => _ReviewComposerState();
+}
+
+class _ReviewComposerState extends State<_ReviewComposer> {
+  final controller = TextEditingController();
+  bool spoiler = false;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      20,
+      20,
+      MediaQuery.viewInsetsOf(context).bottom + 20,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'نظر شما',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 4,
+          keyboardType: TextInputType.multiline,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(hintText: 'نظر خود را بنویسید...'),
+        ),
+        SwitchListTile(
+          value: spoiler,
+          title: const Text('این نظر داستان را لو می‌دهد'),
+          onChanged: (value) => setState(() => spoiler = value),
+        ),
+        FilledButton(
+          onPressed: () {
+            final text = controller.text.trim();
+            if (text.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('متن نظر نمی‌تواند خالی باشد.')),
+              );
+              return;
+            }
+            Navigator.pop(context, _ReviewDraft(text, spoiler));
+          },
+          child: const Text('انتشار نظر'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _ReviewCard extends StatefulWidget {

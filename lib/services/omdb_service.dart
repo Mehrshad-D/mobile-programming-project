@@ -12,9 +12,8 @@ class CatalogException implements Exception {
 }
 
 /// Direct external catalogue adapter for IMDb identifiers via OMDb.
-/// Supply a key with: --dart-define=OMDB_API_KEY=your_key
 class OmdbService {
-  static const _apiKey = String.fromEnvironment('OMDB_API_KEY');
+  static const _apiKey = '8965a68a';
   bool get isConfigured => _apiKey.isNotEmpty;
 
   Future<List<MediaItem>> search(String query) async {

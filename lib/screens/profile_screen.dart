@@ -181,9 +181,9 @@ class ProfileScreen extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.storage_outlined),
-              title: const Text('ذخیره‌سازی محلی'),
+              title: const Text('ذخیره‌سازی سرور'),
               subtitle: const Text(
-                'فعالیت‌ها و نشست تا ۳۰ روز روی دستگاه نگهداری می‌شوند.',
+                'پروفایل و فعالیت‌ها در حساب سرور ذخیره می‌شوند.',
               ),
             ),
           ),
@@ -210,11 +210,16 @@ class ProfileScreen extends StatelessWidget {
       builder: (_) => _ProfileEditor(account: state.account!),
     );
     if (draft != null && context.mounted) {
-      state.updateProfile(
+      final error = await state.updateProfile(
         name: draft.name,
         username: draft.username,
         bio: draft.bio,
       );
+      if (error != null && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+      }
     }
   }
 }

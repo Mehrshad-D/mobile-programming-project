@@ -112,7 +112,14 @@ class _LibraryScreenState extends State<LibraryScreen>
       context: context,
       builder: (_) => const _NewListDialog(),
     );
-    if (name != null && context.mounted) state.createList(name);
+    if (name != null && context.mounted) {
+      final error = await state.createList(name);
+      if (error != null && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+      }
+    }
   }
 }
 
@@ -219,7 +226,14 @@ class _CustomLists extends StatelessWidget {
             ),
             subtitle: Text('${items.length} اثر'),
             trailing: IconButton(
-              onPressed: () => state.deleteList(entry.key),
+              onPressed: () async {
+                final error = await state.deleteList(entry.key);
+                if (error != null && context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(error)));
+                }
+              },
               icon: const Icon(Icons.delete_outline),
             ),
             children: items.isEmpty

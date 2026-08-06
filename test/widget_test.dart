@@ -17,10 +17,15 @@ import 'package:project_film_management/screens/profile_screen.dart';
 import 'package:project_film_management/state/app_state.dart';
 import 'package:project_film_management/widgets/media_widgets.dart';
 
+import 'fake_backend.dart';
+
+Future<AppState> createTestState([FakeBackend? backend]) =>
+    AppState.create(backend: backend ?? FakeBackend());
+
 void main() {
   testWidgets('shows Persian authentication screen', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
+    final state = await createTestState();
     await tester.pumpWidget(FilmYabApp(state: state));
     expect(find.text('فیلم‌یاب'), findsOneWidget);
     expect(find.text('ورود'), findsOneWidget);
@@ -29,22 +34,22 @@ void main() {
 
   test('registration validates and hashes passwords', () async {
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
+    final state = await createTestState();
     expect(
-      state.register(
+      await state.register(
         name: 'کاربر تست',
         username: 'tester',
         email: 'bad',
-        password: '123456',
+        password: '12345678',
       ),
       isNotNull,
     );
     expect(
-      state.register(
+      await state.register(
         name: 'کاربر تست',
         username: 'tester',
         email: 'test@example.com',
-        password: '123456',
+        password: '12345678',
       ),
       isNull,
     );
@@ -55,12 +60,13 @@ void main() {
     'guest catalogue caching does not erase the registered account',
     () async {
       SharedPreferences.setMockInitialValues({});
-      final state = await AppState.create();
-      state.register(
+      final backend = FakeBackend();
+      final state = await createTestState(backend);
+      await state.register(
         name: 'کاربر تست',
         username: 'tester',
         email: 'test@example.com',
-        password: '123456',
+        password: '12345678',
       );
       await Future<void>.delayed(Duration.zero);
       state.logout();
@@ -69,15 +75,15 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       state.logout();
 
-      final restored = await AppState.create();
-      expect(restored.login('test@example.com', '123456'), isNull);
+      final restored = await createTestState(backend);
+      expect(await restored.login('test@example.com', '12345678'), isNull);
       expect(restored.signedIn, isTrue);
     },
   );
 
   test('catalogue series do not contain hard-coded episode subsets', () async {
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
+    final state = await createTestState();
     final series = state.catalog.where((media) => media.isSeries);
     expect(series, isNotEmpty);
     expect(series.every((media) => media.episodes.isEmpty), isTrue);
@@ -91,12 +97,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
-    state.register(
+    final state = await createTestState();
+    await state.register(
       name: 'کاربر تست',
       username: 'آزمایشگر',
       email: 'test@example.com',
-      password: '123456',
+      password: '12345678',
     );
     final media = state.catalog.first;
     await tester.pumpWidget(
@@ -130,12 +136,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
-    state.register(
+    final state = await createTestState();
+    await state.register(
       name: 'کاربر تست',
       username: 'آزمایشگر',
       email: 'test@example.com',
-      password: '123456',
+      password: '12345678',
     );
     await tester.pumpWidget(
       AppScope(
@@ -176,12 +182,13 @@ void main() {
     'persists an online series so My Lists can resolve its IMDb id',
     () async {
       SharedPreferences.setMockInitialValues({});
-      final state = await AppState.create();
-      state.register(
+      final backend = FakeBackend();
+      final state = await createTestState(backend);
+      await state.register(
         name: 'کاربر تست',
         username: 'آزمایشگر',
         email: 'test@example.com',
-        password: '123456',
+        password: '12345678',
       );
       const onlineSeries = MediaItem(
         id: 'tt-online-series',
@@ -209,13 +216,13 @@ void main() {
           ),
         ],
       );
-      state.createList('سریال‌های من');
-      state.setListMembership(onlineSeries.id, {
+      await state.createList('سریال‌های من');
+      await state.setListMembership(onlineSeries.id, {
         'سریال‌های من',
       }, media: onlineSeries);
       await Future<void>.delayed(Duration.zero);
 
-      final restored = await AppState.create();
+      final restored = await createTestState(backend);
       expect(restored.customLists['سریال‌های من'], contains(onlineSeries.id));
       expect(
         restored.allMedia.map((media) => media.id),
@@ -238,7 +245,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
+    final state = await createTestState();
     state.enterAsGuest();
     await tester.pumpWidget(FilmYabApp(state: state));
     await tester.pump();
@@ -259,12 +266,12 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    final state = await AppState.create();
-    state.register(
+    final state = await createTestState();
+    await state.register(
       name: 'نام قدیمی',
       username: 'old_user',
       email: 'test@example.com',
-      password: '123456',
+      password: '12345678',
     );
     await tester.pumpWidget(
       AppScope(

@@ -11,6 +11,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool registerMode = false;
   bool obscure = true;
+  bool submitting = false;
   final formKey = GlobalKey<FormState>();
   final name = TextEditingController();
   final username = TextEditingController();
@@ -26,17 +27,20 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  void submit() {
+  Future<void> submit() async {
     if (!formKey.currentState!.validate()) return;
     final state = AppScope.of(context);
+    setState(() => submitting = true);
     final error = registerMode
-        ? state.register(
+        ? await state.register(
             name: name.text,
             username: username.text,
             email: email.text,
             password: password.text,
           )
-        : state.login(email.text, password.text);
+        : await state.login(email.text, password.text);
+    if (!mounted) return;
+    setState(() => submitting = false);
     if (error != null) {
       ScaffoldMessenger.of(
         context,
@@ -143,7 +147,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                     validator: (v) =>
-                        v == null || v.length < 6 ? 'حداقل ۶ کاراکتر' : null,
+                        v == null || v.length < 8 ? 'حداقل ۸ کاراکتر' : null,
                   ),
                   if (!registerMode)
                     Align(
@@ -155,11 +159,16 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   const SizedBox(height: 10),
                   FilledButton(
-                    onPressed: submit,
+                    onPressed: submitting ? null : submit,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.all(17),
                     ),
-                    child: Text(registerMode ? 'ساخت حساب' : 'ورود'),
+                    child: submitting
+                        ? const SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(registerMode ? 'ساخت حساب' : 'ورود'),
                   ),
                   TextButton(
                     onPressed: () =>
@@ -178,7 +187,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'اطلاعات حساب و فعالیت‌ها فقط روی همین دستگاه ذخیره می‌شوند.',
+                    'حساب و فعالیت‌های اعضا روی سرور پروژه ذخیره می‌شوند.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
                   ),

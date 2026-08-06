@@ -1,20 +1,23 @@
 import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/demo_catalog.dart';
 import '../models/media.dart';
 import '../models/user_account.dart';
+import '../services/backend_service.dart';
 import '../services/omdb_service.dart';
 
 class AppState extends ChangeNotifier {
-  AppState(this._prefs);
+  AppState(this._prefs, {BackendApi? backend})
+    : backend = backend ?? BackendService();
   static const _storageKey = 'filmyab_state_v1';
   final SharedPreferences _prefs;
+  final BackendApi backend;
   final OmdbService catalogue = OmdbService();
 
+  String? _accessToken;
   UserAccount? account;
   UserAccount? registeredAccount;
   DateTime? _sessionExpiry;
@@ -22,12 +25,14 @@ class AppState extends ChangeNotifier {
   bool ready = false;
   bool searching = false;
   String? searchError;
+  String? syncError;
   List<MediaItem> searchResults = const [];
   final Map<String, WatchStatus> statuses = {};
   final Set<String> watchedEpisodes = {};
   final Map<String, int> ratings = {};
   final Map<String, List<Review>> reviews = {};
   final Map<String, Set<String>> customLists = {};
+  final Map<String, int> customListIds = {};
   final Map<String, MediaItem> savedMedia = {};
 
   bool get signedIn => account != null;
@@ -40,21 +45,31 @@ class AppState extends ChangeNotifier {
     ];
   }
 
-  static Future<AppState> create() async {
-    final state = AppState(await SharedPreferences.getInstance());
+  static Future<AppState> create({BackendApi? backend}) async {
+    final state = AppState(
+      await SharedPreferences.getInstance(),
+      backend: backend,
+    );
     state._restore();
+    if (state._accessToken != null && state.signedIn) {
+      state.backend.token = state._accessToken;
+      try {
+        await state._synchronizeMemberData();
+      } on BackendException catch (error) {
+        state.syncError = error.message;
+        if (error.code == 'invalid_token') state._clearSession();
+      }
+    }
     state.ready = true;
     return state;
   }
 
-  String _hash(String input) => sha256.convert(utf8.encode(input)).toString();
-
-  String? register({
+  Future<String?> register({
     required String name,
     required String username,
     required String email,
     required String password,
-  }) {
+  }) async {
     if (name.trim().length < 2) return 'نام و نام خانوادگی را کامل وارد کنید.';
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email.trim())) {
       return 'ساختار ایمیل معتبر نیست.';
@@ -62,68 +77,35 @@ class AppState extends ChangeNotifier {
     if (username.trim().length < 3) {
       return 'نام کاربری باید حداقل ۳ کاراکتر باشد.';
     }
-    if (password.length < 6) return 'رمز عبور باید حداقل ۶ کاراکتر باشد.';
-    final stored = _prefs.getString(_storageKey);
-    if (stored != null) {
-      final old = jsonDecode(stored) as Map<String, dynamic>;
-      final oldUser = old['account'] as Map<String, dynamic>?;
-      if (oldUser != null &&
-          (oldUser['email'] == email.trim() ||
-              oldUser['username'] == username.trim())) {
-        return 'این ایمیل یا نام کاربری قبلاً ثبت شده است.';
-      }
+    if (password.length < 8) return 'رمز عبور باید حداقل ۸ کاراکتر باشد.';
+    try {
+      final profile = await backend.register(
+        name: name.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        password: password,
+      );
+      _startSession(profile);
+      await _synchronizeMemberData(refreshProfile: false);
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
     }
-    registeredAccount = UserAccount(
-      name: name.trim(),
-      username: username.trim(),
-      email: email.trim(),
-      passwordHash: _hash(password),
-    );
-    account = registeredAccount;
-    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
-    guest = false;
-    _save();
-    notifyListeners();
-    return null;
   }
 
-  String? login(String email, String password) {
-    final stored = _prefs.getString(_storageKey);
-    if (stored == null) return 'ابتدا یک حساب کاربری بسازید.';
-    final json = jsonDecode(stored) as Map<String, dynamic>;
-    final userJson = json['account'] as Map<String, dynamic>?;
-    if (userJson == null) return 'حسابی با این ایمیل وجود ندارد.';
-    final user = UserAccount.fromJson(userJson);
-    if (user.email != email.trim() || user.passwordHash != _hash(password)) {
-      return 'ایمیل یا رمز عبور نادرست است.';
+  Future<String?> login(String email, String password) async {
+    try {
+      final profile = await backend.login(email.trim(), password);
+      _startSession(profile);
+      await _synchronizeMemberData(refreshProfile: false);
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
     }
-    account = user;
-    registeredAccount = user;
-    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
-    guest = false;
-    _restoreActivity(json);
-    _save();
-    notifyListeners();
-    return null;
   }
 
   String? resetPassword(String email, String newPassword) {
-    final stored = _prefs.getString(_storageKey);
-    if (stored == null) return 'حساب ذخیره‌شده‌ای وجود ندارد.';
-    final json = jsonDecode(stored) as Map<String, dynamic>;
-    final userJson = json['account'] as Map<String, dynamic>?;
-    if (userJson == null) return 'حساب ذخیره‌شده‌ای وجود ندارد.';
-    final storedUser = UserAccount.fromJson(userJson);
-    if (storedUser.email != email.trim()) {
-      return 'ایمیل وارد شده با حساب ذخیره‌شده مطابقت ندارد.';
-    }
-    if (newPassword.length < 6) return 'رمز جدید باید حداقل ۶ کاراکتر باشد.';
-    registeredAccount = storedUser.copyWith(passwordHash: _hash(newPassword));
-    account = registeredAccount;
-    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
-    _save();
-    notifyListeners();
-    return null;
+    return 'بازیابی امن رمز عبور باید از طریق ایمیل سرور انجام شود.';
   }
 
   void enterAsGuest() {
@@ -135,9 +117,7 @@ class AppState extends ChangeNotifier {
   }
 
   void logout() {
-    guest = false;
-    account = null;
-    _sessionExpiry = DateTime.fromMillisecondsSinceEpoch(0);
+    _clearSession();
     _save();
     notifyListeners();
   }
@@ -148,6 +128,7 @@ class AppState extends ChangeNotifier {
 
   void setStatus(String id, WatchStatus status, {MediaItem? media}) {
     if (!signedIn) return;
+    final wasFavorite = isFavorite(id);
     _remember(media);
     if (status == WatchStatus.none) {
       statuses.remove(id);
@@ -155,6 +136,10 @@ class AppState extends ChangeNotifier {
       statuses[id] = status;
     }
     _changed();
+    _send(backend.setWatchStatus(id, status.name));
+    if (wasFavorite != (status == WatchStatus.favorite)) {
+      _send(backend.setFavorite(id, status == WatchStatus.favorite));
+    }
   }
 
   void toggleFavorite(String id, {MediaItem? media}) => setStatus(
@@ -168,10 +153,15 @@ class AppState extends ChangeNotifier {
     if (!signedIn) return;
     _remember(media);
     final key = '$mediaId:$episodeId';
-    watchedEpisodes.contains(key)
-        ? watchedEpisodes.remove(key)
-        : watchedEpisodes.add(key);
+    final watched = !watchedEpisodes.contains(key);
+    watched ? watchedEpisodes.add(key) : watchedEpisodes.remove(key);
     _changed();
+    final episode = media?.episodes
+        .where((item) => item.id == episodeId)
+        .firstOrNull;
+    if (episode?.databaseId != null) {
+      _send(backend.setEpisodeWatched(episode!.databaseId!, watched));
+    }
   }
 
   double progress(MediaItem media) {
@@ -189,6 +179,7 @@ class AppState extends ChangeNotifier {
       _remember(media);
       ratings[id] = value.clamp(1, 5);
       _changed();
+      _send(backend.rate(id, ratings[id]!));
     }
   }
 
@@ -207,12 +198,20 @@ class AppState extends ChangeNotifier {
           ),
         );
     _changed();
+    _send(backend.addReview(id, text.trim(), spoiler));
   }
 
-  void createList(String name) {
-    if (signedIn && name.trim().isNotEmpty) {
-      customLists.putIfAbsent(name.trim(), () => {});
+  Future<String?> createList(String name) async {
+    final cleaned = name.trim();
+    if (!signedIn || cleaned.isEmpty) return null;
+    try {
+      final result = await backend.createList(cleaned);
+      customLists.putIfAbsent(result['name'] as String, () => {});
+      customListIds[result['name'] as String] = result['id'] as int;
       _changed();
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
     }
   }
 
@@ -224,26 +223,45 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void setListMembership(
+  Future<String?> setListMembership(
     String id,
     Set<String> selectedLists, {
     MediaItem? media,
-  }) {
-    if (!signedIn) return;
+  }) async {
+    if (!signedIn) return null;
     _remember(media);
-    for (final entry in customLists.entries) {
-      if (selectedLists.contains(entry.key)) {
-        entry.value.add(id);
-      } else {
-        entry.value.remove(id);
+    try {
+      for (final entry in customLists.entries) {
+        final listId = customListIds[entry.key];
+        if (listId == null) continue;
+        final shouldContain = selectedLists.contains(entry.key);
+        final contains = entry.value.contains(id);
+        if (shouldContain && !contains) {
+          await backend.addListItem(listId, id);
+        } else if (!shouldContain && contains) {
+          await backend.removeListItem(listId, id);
+        }
+        shouldContain ? entry.value.add(id) : entry.value.remove(id);
       }
+      _changed();
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
     }
-    _changed();
   }
 
-  void deleteList(String name) {
-    customLists.remove(name);
-    _changed();
+  Future<String?> deleteList(String name) async {
+    final id = customListIds[name];
+    if (id == null) return null;
+    try {
+      await backend.deleteList(id);
+      customLists.remove(name);
+      customListIds.remove(name);
+      _changed();
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
+    }
   }
 
   void _remember(MediaItem? media) {
@@ -255,19 +273,25 @@ class AppState extends ChangeNotifier {
     _save();
   }
 
-  void updateProfile({
+  Future<String?> updateProfile({
     required String name,
     required String username,
     required String bio,
-  }) {
-    if (account == null) return;
-    account = account!.copyWith(
-      name: name.trim(),
-      username: username.trim(),
-      bio: bio.trim(),
-    );
-    registeredAccount = account;
-    _changed();
+  }) async {
+    if (account == null) return null;
+    try {
+      final profile = await backend.updateProfile(
+        name: name.trim(),
+        username: username.trim(),
+        bio: bio.trim(),
+      );
+      account = _accountFromProfile(profile);
+      registeredAccount = account;
+      _changed();
+      return null;
+    } on BackendException catch (error) {
+      return error.message;
+    }
   }
 
   Future<void> search(String query) async {
@@ -310,10 +334,100 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  UserAccount _accountFromProfile(Map<String, dynamic> profile) => UserAccount(
+    name: profile['name'] as String,
+    username: profile['username'] as String,
+    email: profile['email'] as String,
+    passwordHash: '',
+    bio: profile['bio']?.toString() ?? '',
+  );
+
+  void _startSession(Map<String, dynamic> profile) {
+    _accessToken = backend.token;
+    account = _accountFromProfile(profile);
+    registeredAccount = account;
+    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
+    guest = false;
+    syncError = null;
+    _save();
+    notifyListeners();
+  }
+
+  void _clearSession() {
+    guest = false;
+    account = null;
+    _accessToken = null;
+    backend.token = null;
+    _sessionExpiry = DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  Future<void> _synchronizeMemberData({bool refreshProfile = true}) async {
+    if (refreshProfile) {
+      account = _accountFromProfile(await backend.profile());
+      registeredAccount = account;
+    }
+    final serverLists = await backend.lists();
+    customLists.clear();
+    customListIds.clear();
+    for (final list in serverLists) {
+      final name = list['name'] as String;
+      customLists[name] = (list['media_ids'] as List<dynamic>)
+          .cast<String>()
+          .toSet();
+      customListIds[name] = list['id'] as int;
+    }
+    final serverActivity = await backend.activity();
+    statuses.clear();
+    for (final item in serverActivity['watch_statuses'] as List<dynamic>) {
+      final row = item as Map<String, dynamic>;
+      statuses[row['media_id'] as String] = WatchStatus.values.byName(
+        row['status'] as String,
+      );
+    }
+    for (final id
+        in (serverActivity['favorite_ids'] as List<dynamic>).cast<String>()) {
+      statuses[id] = WatchStatus.favorite;
+    }
+    ratings
+      ..clear()
+      ..addEntries(
+        (serverActivity['ratings'] as List<dynamic>).map((item) {
+          final row = item as Map<String, dynamic>;
+          return MapEntry(row['media_id'] as String, row['value'] as int);
+        }),
+      );
+    final watchedDatabaseIds =
+        (serverActivity['watched_episode_ids'] as List<dynamic>)
+            .cast<int>()
+            .toSet();
+    watchedEpisodes.clear();
+    for (final media in savedMedia.values) {
+      for (final episode in media.episodes) {
+        if (watchedDatabaseIds.contains(episode.databaseId)) {
+          watchedEpisodes.add('${media.id}:${episode.id}');
+        }
+      }
+    }
+    syncError = null;
+    _save();
+    notifyListeners();
+  }
+
+  Future<void> _send(Future<void> request) async {
+    try {
+      await request;
+      syncError = null;
+    } on BackendException catch (error) {
+      syncError = error.message;
+      notifyListeners();
+    }
+  }
+
   void _restore() {
     final raw = _prefs.getString(_storageKey);
     if (raw == null) return;
     final json = jsonDecode(raw) as Map<String, dynamic>;
+    _accessToken = json['accessToken'] as String?;
     final expiry = DateTime.tryParse(json['sessionExpiry']?.toString() ?? '');
     _sessionExpiry = expiry;
     if (json['account'] != null) {
@@ -321,7 +435,9 @@ class AppState extends ChangeNotifier {
         json['account'] as Map<String, dynamic>,
       );
     }
-    if (expiry != null && expiry.isAfter(DateTime.now())) {
+    if (expiry != null &&
+        expiry.isAfter(DateTime.now()) &&
+        _accessToken != null) {
       account = registeredAccount;
     }
     _restoreActivity(json);
@@ -366,6 +482,13 @@ class AppState extends ChangeNotifier {
           (k, v) => MapEntry(k, (v as List).cast<String>().toSet()),
         ),
       );
+    customListIds
+      ..clear()
+      ..addAll(
+        (json['customListIds'] as Map<String, dynamic>? ?? {}).map(
+          (name, id) => MapEntry(name, id as int),
+        ),
+      );
     savedMedia
       ..clear()
       ..addAll(
@@ -380,6 +503,7 @@ class AppState extends ChangeNotifier {
     _storageKey,
     jsonEncode({
       'account': registeredAccount?.toJson(),
+      'accessToken': _accessToken,
       'sessionExpiry':
           (_sessionExpiry ?? DateTime.fromMillisecondsSinceEpoch(0))
               .toIso8601String(),
@@ -390,6 +514,7 @@ class AppState extends ChangeNotifier {
         (k, v) => MapEntry(k, v.map((e) => e.toJson()).toList()),
       ),
       'customLists': customLists.map((k, v) => MapEntry(k, v.toList())),
+      'customListIds': customListIds,
       'savedMedia': savedMedia.map((id, media) => MapEntry(id, media.toJson())),
     }),
   );

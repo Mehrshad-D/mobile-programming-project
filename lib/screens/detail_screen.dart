@@ -385,7 +385,16 @@ class _Actions extends StatelessWidget {
       ),
     );
     if (selected != null && context.mounted) {
-      state.setListMembership(media.id, selected, media: media);
+      final error = await state.setListMembership(
+        media.id,
+        selected,
+        media: media,
+      );
+      if (error != null && context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
+      }
     }
   }
 }

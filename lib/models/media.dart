@@ -16,12 +16,14 @@ extension WatchStatusLabel on WatchStatus {
 
 class Episode {
   const Episode({
+    this.databaseId,
     required this.season,
     required this.number,
     required this.title,
     required this.runtime,
     required this.overview,
   });
+  final int? databaseId;
   final int season;
   final int number;
   final String title;
@@ -31,6 +33,7 @@ class Episode {
   String get id => '$season-$number';
 
   Map<String, dynamic> toJson() => {
+    'databaseId': databaseId,
     'season': season,
     'number': number,
     'title': title,
@@ -39,6 +42,7 @@ class Episode {
   };
 
   factory Episode.fromJson(Map<String, dynamic> json) => Episode(
+    databaseId: json['databaseId'] as int?,
     season: json['season'] as int,
     number: json['number'] as int,
     title: json['title'] as String,

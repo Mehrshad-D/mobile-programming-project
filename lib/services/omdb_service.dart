@@ -96,20 +96,20 @@ class OmdbService {
     int defaultRuntime,
   ) async {
     if (seasonCount <= 0) return const [];
-    final seasons = await Future.wait([
-      for (var season = 1; season <= seasonCount; season++)
-        _get(
-          Uri.https('www.omdbapi.com', '/', {
-            'apikey': _apiKey,
-            'i': id,
-            'Season': '$season',
-          }),
-        ),
-    ]);
     final episodes = <Episode>[];
-    for (var index = 0; index < seasons.length; index++) {
-      final response = seasons[index];
-      if (response['Response'] == 'False') continue;
+    for (var season = 1; season <= seasonCount; season++) {
+      final response = await _get(
+        Uri.https('www.omdbapi.com', '/', {
+          'apikey': _apiKey,
+          'i': id,
+          'Season': '$season',
+        }),
+      );
+      if (response['Response'] == 'False') {
+        throw CatalogException(
+          response['Error']?.toString() ?? 'اطلاعات فصل $season دریافت نشد.',
+        );
+      }
       for (final raw in response['Episodes'] as List<dynamic>? ?? const []) {
         final json = raw as Map<String, dynamic>;
         final number = int.tryParse(json['Episode']?.toString() ?? '');
@@ -117,7 +117,7 @@ class OmdbService {
         final released = json['Released']?.toString();
         episodes.add(
           Episode(
-            season: index + 1,
+            season: season,
             number: number,
             title: json['Title']?.toString() ?? 'قسمت $number',
             runtime: defaultRuntime,

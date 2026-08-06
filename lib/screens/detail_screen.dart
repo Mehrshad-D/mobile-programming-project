@@ -21,7 +21,7 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (media.isSeries && media.episodes.isEmpty && !_requestedEpisodes) {
+    if (media.isSeries && !_requestedEpisodes) {
       _loadEpisodes();
     }
   }

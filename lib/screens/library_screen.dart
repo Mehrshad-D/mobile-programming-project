@@ -12,7 +12,14 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController tabs = TabController(length: 5, vsync: this);
+  late final TabController tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    tabs = TabController(length: 5, vsync: this);
+  }
+
   @override
   void dispose() {
     tabs.dispose();

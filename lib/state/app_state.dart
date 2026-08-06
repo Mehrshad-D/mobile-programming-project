@@ -16,6 +16,8 @@ class AppState extends ChangeNotifier {
   final OmdbService catalogue = OmdbService();
 
   UserAccount? account;
+  UserAccount? registeredAccount;
+  DateTime? _sessionExpiry;
   bool guest = false;
   bool ready = false;
   bool searching = false;
@@ -71,12 +73,14 @@ class AppState extends ChangeNotifier {
         return 'این ایمیل یا نام کاربری قبلاً ثبت شده است.';
       }
     }
-    account = UserAccount(
+    registeredAccount = UserAccount(
       name: name.trim(),
       username: username.trim(),
       email: email.trim(),
       passwordHash: _hash(password),
     );
+    account = registeredAccount;
+    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
     guest = false;
     _save();
     notifyListeners();
@@ -94,6 +98,8 @@ class AppState extends ChangeNotifier {
       return 'ایمیل یا رمز عبور نادرست است.';
     }
     account = user;
+    registeredAccount = user;
+    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
     guest = false;
     _restoreActivity(json);
     _save();
@@ -112,7 +118,9 @@ class AppState extends ChangeNotifier {
       return 'ایمیل وارد شده با حساب ذخیره‌شده مطابقت ندارد.';
     }
     if (newPassword.length < 6) return 'رمز جدید باید حداقل ۶ کاراکتر باشد.';
-    account = storedUser.copyWith(passwordHash: _hash(newPassword));
+    registeredAccount = storedUser.copyWith(passwordHash: _hash(newPassword));
+    account = registeredAccount;
+    _sessionExpiry = DateTime.now().add(const Duration(days: 30));
     _save();
     notifyListeners();
     return null;
@@ -121,20 +129,16 @@ class AppState extends ChangeNotifier {
   void enterAsGuest() {
     guest = true;
     account = null;
+    _sessionExpiry = DateTime.fromMillisecondsSinceEpoch(0);
+    _save();
     notifyListeners();
   }
 
   void logout() {
     guest = false;
-    final raw = _prefs.getString(_storageKey);
-    if (raw != null) {
-      final json = jsonDecode(raw) as Map<String, dynamic>;
-      json['sessionExpiry'] = DateTime.fromMillisecondsSinceEpoch(
-        0,
-      ).toIso8601String();
-      _prefs.setString(_storageKey, jsonEncode(json));
-    }
     account = null;
+    _sessionExpiry = DateTime.fromMillisecondsSinceEpoch(0);
+    _save();
     notifyListeners();
   }
 
@@ -262,6 +266,7 @@ class AppState extends ChangeNotifier {
       username: username.trim(),
       bio: bio.trim(),
     );
+    registeredAccount = account;
     _changed();
   }
 
@@ -310,10 +315,14 @@ class AppState extends ChangeNotifier {
     if (raw == null) return;
     final json = jsonDecode(raw) as Map<String, dynamic>;
     final expiry = DateTime.tryParse(json['sessionExpiry']?.toString() ?? '');
-    if (expiry != null &&
-        expiry.isAfter(DateTime.now()) &&
-        json['account'] != null) {
-      account = UserAccount.fromJson(json['account'] as Map<String, dynamic>);
+    _sessionExpiry = expiry;
+    if (json['account'] != null) {
+      registeredAccount = UserAccount.fromJson(
+        json['account'] as Map<String, dynamic>,
+      );
+    }
+    if (expiry != null && expiry.isAfter(DateTime.now())) {
+      account = registeredAccount;
     }
     _restoreActivity(json);
   }
@@ -370,10 +379,10 @@ class AppState extends ChangeNotifier {
   Future<void> _save() => _prefs.setString(
     _storageKey,
     jsonEncode({
-      'account': account?.toJson(),
-      'sessionExpiry': DateTime.now()
-          .add(const Duration(days: 30))
-          .toIso8601String(),
+      'account': registeredAccount?.toJson(),
+      'sessionExpiry':
+          (_sessionExpiry ?? DateTime.fromMillisecondsSinceEpoch(0))
+              .toIso8601String(),
       'statuses': statuses.map((k, v) => MapEntry(k, v.name)),
       'watchedEpisodes': watchedEpisodes.toList(),
       'ratings': ratings,

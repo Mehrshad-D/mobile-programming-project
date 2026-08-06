@@ -51,8 +51,7 @@ class MediaPosterCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: .68,
+            Expanded(
               child: Stack(
                 fit: StackFit.expand,
                 children: [

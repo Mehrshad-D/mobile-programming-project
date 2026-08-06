@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../models/media.dart';
+import '../models/user_account.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -201,75 +202,106 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _edit(BuildContext context) {
+  Future<void> _edit(BuildContext context) async {
     final state = AppScope.of(context);
-    final name = TextEditingController(text: state.account!.name),
-        username = TextEditingController(text: state.account!.username),
-        bio = TextEditingController(text: state.account!.bio);
-    showModalBottomSheet<void>(
+    final draft = await showModalBottomSheet<_ProfileDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          24,
-          20,
-          MediaQuery.viewInsetsOf(sheetContext).bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'ویرایش پروفایل',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: name,
-              textDirection: TextDirection.rtl,
-              textAlign: TextAlign.right,
-              decoration: const InputDecoration(
-                labelText: 'نام و نام خانوادگی',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: username,
-              textDirection: TextDirection.rtl,
-              textAlign: TextAlign.right,
-              decoration: const InputDecoration(labelText: 'نام کاربری'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: bio,
-              maxLines: 3,
-              keyboardType: TextInputType.multiline,
-              textDirection: TextDirection.rtl,
-              textAlign: TextAlign.right,
-              decoration: const InputDecoration(labelText: 'درباره من'),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                state.updateProfile(
-                  name: name.text,
-                  username: username.text,
-                  bio: bio.text,
-                );
-                Navigator.pop(sheetContext);
-              },
-              child: const Text('ذخیره'),
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(() {
-      name.dispose();
-      username.dispose();
-      bio.dispose();
-    });
+      builder: (_) => _ProfileEditor(account: state.account!),
+    );
+    if (draft != null && context.mounted) {
+      state.updateProfile(
+        name: draft.name,
+        username: draft.username,
+        bio: draft.bio,
+      );
+    }
   }
+}
+
+class _ProfileDraft {
+  const _ProfileDraft({
+    required this.name,
+    required this.username,
+    required this.bio,
+  });
+  final String name;
+  final String username;
+  final String bio;
+}
+
+class _ProfileEditor extends StatefulWidget {
+  const _ProfileEditor({required this.account});
+  final UserAccount account;
+
+  @override
+  State<_ProfileEditor> createState() => _ProfileEditorState();
+}
+
+class _ProfileEditorState extends State<_ProfileEditor> {
+  late final name = TextEditingController(text: widget.account.name);
+  late final username = TextEditingController(text: widget.account.username);
+  late final bio = TextEditingController(text: widget.account.bio);
+
+  @override
+  void dispose() {
+    name.dispose();
+    username.dispose();
+    bio.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.fromLTRB(
+      20,
+      24,
+      20,
+      MediaQuery.viewInsetsOf(context).bottom + 24,
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('ویرایش پروفایل', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+        TextField(
+          controller: name,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(labelText: 'نام و نام خانوادگی'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: username,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(labelText: 'نام کاربری'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: bio,
+          maxLines: 3,
+          keyboardType: TextInputType.multiline,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.right,
+          decoration: const InputDecoration(labelText: 'درباره من'),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _ProfileDraft(
+              name: name.text.trim(),
+              username: username.text.trim(),
+              bio: bio.text.trim(),
+            ),
+          ),
+          child: const Text('ذخیره'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _Stat extends StatelessWidget {

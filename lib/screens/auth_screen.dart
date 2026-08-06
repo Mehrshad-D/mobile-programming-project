@@ -191,47 +191,81 @@ class _AuthScreenState extends State<AuthScreen> {
     ),
   );
 
-  void _resetDialog() {
-    final newPassword = TextEditingController();
-    showDialog<void>(
+  Future<void> _resetDialog() async {
+    final draft = await showDialog<_PasswordResetDraft>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('تغییر رمز عبور'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: email,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'ایمیل حساب'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: newPassword,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'رمز جدید'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('انصراف'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final error = AppScope.of(
-                context,
-              ).resetPassword(email.text, newPassword.text);
-              if (error == null) Navigator.pop(context);
-              ScaffoldMessenger.of(this.context).showSnackBar(
-                SnackBar(content: Text(error ?? 'رمز عبور تغییر کرد.')),
-              );
-            },
-            child: const Text('ثبت'),
-          ),
-        ],
-      ),
-    ).whenComplete(newPassword.dispose);
+      builder: (_) => _PasswordResetDialog(initialEmail: email.text),
+    );
+    if (draft == null || !mounted) return;
+    email.text = draft.email;
+    final error = AppScope.of(
+      context,
+    ).resetPassword(draft.email, draft.password);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(error ?? 'رمز عبور تغییر کرد.')));
   }
+}
+
+class _PasswordResetDraft {
+  const _PasswordResetDraft(this.email, this.password);
+  final String email;
+  final String password;
+}
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({required this.initialEmail});
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  late final email = TextEditingController(text: widget.initialEmail);
+  final password = TextEditingController();
+
+  @override
+  void dispose() {
+    email.dispose();
+    password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('تغییر رمز عبور'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: email,
+          keyboardType: TextInputType.emailAddress,
+          textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(labelText: 'ایمیل حساب'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: password,
+          obscureText: true,
+          textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(labelText: 'رمز جدید'),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('انصراف'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.pop(
+          context,
+          _PasswordResetDraft(email.text.trim(), password.text),
+        ),
+        child: const Text('ثبت'),
+      ),
+    ],
+  );
 }

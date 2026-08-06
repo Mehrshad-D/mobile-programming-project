@@ -13,7 +13,9 @@ import 'package:project_film_management/main.dart';
 import 'package:project_film_management/models/media.dart';
 import 'package:project_film_management/screens/detail_screen.dart';
 import 'package:project_film_management/screens/library_screen.dart';
+import 'package:project_film_management/screens/profile_screen.dart';
 import 'package:project_film_management/state/app_state.dart';
+import 'package:project_film_management/widgets/media_widgets.dart';
 
 void main() {
   testWidgets('shows Persian authentication screen', (tester) async {
@@ -47,6 +49,38 @@ void main() {
       isNull,
     );
     expect(state.account!.passwordHash, isNot('123456'));
+  });
+
+  test(
+    'guest catalogue caching does not erase the registered account',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = await AppState.create();
+      state.register(
+        name: 'کاربر تست',
+        username: 'tester',
+        email: 'test@example.com',
+        password: '123456',
+      );
+      await Future<void>.delayed(Duration.zero);
+      state.logout();
+      state.enterAsGuest();
+      state.cacheMedia(state.catalog.first);
+      await Future<void>.delayed(Duration.zero);
+      state.logout();
+
+      final restored = await AppState.create();
+      expect(restored.login('test@example.com', '123456'), isNull);
+      expect(restored.signedIn, isTrue);
+    },
+  );
+
+  test('catalogue series do not contain hard-coded episode subsets', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = await AppState.create();
+    final series = state.catalog.where((media) => media.isSeries);
+    expect(series, isNotEmpty);
+    expect(series.every((media) => media.episodes.isEmpty), isTrue);
   });
 
   testWidgets('accepts Persian comments and closes the composer safely', (
@@ -195,4 +229,62 @@ void main() {
       );
     },
   );
+
+  testWidgets('home poster grids do not overflow on a narrow phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final state = await AppState.create();
+    state.enterAsGuest();
+    await tester.pumpWidget(FilmYabApp(state: state));
+    await tester.pump();
+
+    final scrollView = find.byType(CustomScrollView);
+    for (var i = 0; i < 8 && find.text('آثار جدید').evaluate().isEmpty; i++) {
+      await tester.drag(scrollView, const Offset(0, -500));
+      await tester.pump();
+    }
+    await tester.drag(scrollView, const Offset(0, -500));
+    await tester.pump();
+
+    expect(find.byType(MediaPosterCard), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('profile editor closes before updating global state', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = await AppState.create();
+    state.register(
+      name: 'نام قدیمی',
+      username: 'old_user',
+      email: 'test@example.com',
+      password: '123456',
+    );
+    await tester.pumpWidget(
+      AppScope(
+        state: state,
+        child: const MaterialApp(home: ProfileScreen()),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'نام جدید');
+    await tester.enterText(fields.at(1), 'کاربر جدید');
+    await tester.enterText(fields.at(2), 'زندگینامه جدید');
+    await tester.tap(find.text('ذخیره'));
+    await tester.pumpAndSettle();
+
+    expect(state.account!.name, 'نام جدید');
+    expect(state.account!.username, 'کاربر جدید');
+    expect(state.account!.bio, 'زندگینامه جدید');
+    expect(tester.takeException(), isNull);
+  });
 }

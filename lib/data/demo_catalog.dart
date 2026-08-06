@@ -3,18 +3,6 @@ import '../models/media.dart';
 const _img = 'https://image.tmdb.org/t/p/w500';
 const _wide = 'https://image.tmdb.org/t/p/w1280';
 
-List<Episode> _episodes(String name, int seasons, int perSeason) => [
-  for (var s = 1; s <= seasons; s++)
-    for (var e = 1; e <= perSeason; e++)
-      Episode(
-        season: s,
-        number: e,
-        title: '$name - قسمت $e',
-        runtime: 52,
-        overview: 'در این قسمت مسیر شخصیت‌ها با یک اتفاق تازه تغییر می‌کند.',
-      ),
-];
-
 final demoCatalog = <MediaItem>[
   const MediaItem(
     id: 'tt1375666',
@@ -104,7 +92,6 @@ final demoCatalog = <MediaItem>[
     director: 'Vince Gilligan',
     cast: const ['Bryan Cranston', 'Aaron Paul', 'Anna Gunn'],
     status: 'پایان یافته',
-    episodes: _episodes('بریکینگ بد', 3, 5),
     featured: true,
   ),
   MediaItem(
@@ -125,7 +112,6 @@ final demoCatalog = <MediaItem>[
     director: 'David Benioff & D. B. Weiss',
     cast: const ['Emilia Clarke', 'Kit Harington', 'Peter Dinklage'],
     status: 'پایان یافته',
-    episodes: _episodes('بازی تاج‌وتخت', 3, 5),
   ),
   MediaItem(
     id: 'tt2861424',
@@ -144,7 +130,6 @@ final demoCatalog = <MediaItem>[
     director: 'Dan Harmon & Justin Roiland',
     cast: const ['Ian Cardoni', 'Harry Belden', 'Chris Parnell'],
     status: 'در حال پخش',
-    episodes: _episodes('ریک و مورتی', 2, 6),
   ),
   MediaItem(
     id: 'tt7366338',
@@ -164,6 +149,5 @@ final demoCatalog = <MediaItem>[
     director: 'Craig Mazin',
     cast: const ['Jared Harris', 'Stellan Skarsgård', 'Emily Watson'],
     status: 'مینی‌سریال',
-    episodes: _episodes('چرنوبیل', 1, 5),
   ),
 ];
